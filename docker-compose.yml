@@ -1,0 +1,111 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: leubok-postgres
+    environment:
+      POSTGRES_USER: leubok_user
+      POSTGRES_PASSWORD: leubok_password
+      POSTGRES_DB: leubok_db
+      POSTGRES_INITDB_ARGS: "-c shared_preload_libraries=pg_stat_statements"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - leubok-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leubok_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: leubok-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - leubok-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: leubok-backend
+    environment:
+      DATABASE_URL: postgresql://leubok_user:leubok_password@postgres:5432/leubok_db
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: development
+      PORT: 3500
+    ports:
+      - "3500:3500"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - leubok-network
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # Frontend UI
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: leubok-frontend
+    environment:
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:3500
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - leubok-network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  # Admin Panel
+  admin-panel:
+    build:
+      context: ./admin-panel
+      dockerfile: Dockerfile
+    container_name: leubok-admin
+    environment:
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:3500
+    ports:
+      - "3001:3001"
+    depends_on:
+      - backend
+    networks:
+      - leubok-network
+    volumes:
+      - ./admin-panel:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  leubok-network:
+    driver: bridge
