@@ -1,0 +1,1 @@
+node_modules/\n.env\n.env.local\n.env.*.local\n.DS_Store\n*.log\n.vscode/\n.idea/\ndist/\nbuild/\n.next/\nout/\n.vercel/\n.turbo/\n*.pem\n.cache/\ntarget/\n.gradle/\nCargo.lock
